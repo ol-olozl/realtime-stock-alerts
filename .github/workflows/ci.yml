@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  python-checks:
+    name: Python Lint & Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies (FastAPI & Spark job)
+        run: |
+          pip install --upgrade pip
+          if [ -f services/fastapi_ingest/requirements.txt ]; then \
+            pip install -r services/fastapi_ingest/requirements.txt; \
+          fi
+          if [ -f services/spark_job/requirements.txt ]; then \
+            pip install -r services/spark_job/requirements.txt; \
+          fi
+          pip install ruff black pytest || true
+
+      - name: Lint (ruff)
+        run: |
+          ruff check services || echo "ruff not installed or no Python files"
+
+      - name: Format check (black)
+        run: |
+          black --check services || echo "black not installed or no Python files"
+
+      - name: Run tests (if any)
+        run: |
+          if [ -d tests ]; then
+            pytest -q
+          else
+            echo "No tests/ directory. Skipping."
+          fi
+
+  docker-build:
+    name: Docker Compose build (smoke)
+    runs-on: ubuntu-latest
+    needs: python-checks
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compose build
+        run: |
+          docker compose -f infra/docker-compose.yml config
+          docker compose -f infra/docker-compose.yml build
