@@ -1,0 +1,54 @@
+x-env: &default-env
+  env_file: ["./.env"]
+
+services:
+  zookeeper:
+    image: bitnami/zookeeper:3.9
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    ports: ["2181:2181"]
+
+  kafka:
+    image: bitnami/kafka:3.7
+    depends_on: [zookeeper]
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_LISTENERS=PLAINTEXT://:9092,PLAINTEXT_HOST://:29092
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    ports: ["9092:9092","29092:29092"]
+
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    environment:
+      - CLICKHOUSE_DB=${CH_DB}
+    ports: ["8123:8123","9000:9000"]
+    volumes:
+      - ch_data:/var/lib/clickhouse
+      - ../services/init:/init:ro   # mount schemas
+
+  # 최소 FastAPI 서비스 (헬스체크만)
+  fastapi:
+    build: ../services/fastapi_ingest
+    <<: *default-env
+    depends_on: [kafka, clickhouse]
+    ports: ["8000:8000"]
+
+  spark:
+    build: ../services/spark_job
+    depends_on: [kafka, clickhouse]
+    <<: *default-env
+    environment:
+      - SPARK_MODE=client
+    volumes:
+      - ../services/spark_job:/app
+    command: ["spark-submit",
+              "--packages","org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0",
+              "/app/job.py"]
+
+volumes:
+  ch_data:
