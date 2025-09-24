@@ -4,10 +4,10 @@
 Demonstrate real-time data pipeline design and event-driven alerting as a portfolio project.
 
 ### Architecture
-FastAPI → Kafka → Spark → ClickHouse → Email Alerts
+FastAPI → Kafka → Spark → ClickHouse → Email Alerts / Kakao Message
 
 ### Components
-- FastAPI: Pulls stock prices from external APIs, exposes REST endpoints for alert rules, and sends alert emails.
+- FastAPI: Pulls stock prices from external APIs, exposes REST endpoints for alert rules, and sends alert emails and kakao messages.
 - Kafka: Serves as a message broker and buffer between services.
 - Spark: Performs real-time percentage change analysis and applies alert conditions.
 - ClickHouse: Stores raw ticks, metrics, and alerts for ultra-low-latency queries.
